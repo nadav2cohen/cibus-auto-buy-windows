@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.env
+logs/
+*.log
+.playwright-profile/
+cibus_otp.txt
