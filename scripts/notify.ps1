@@ -1,26 +1,33 @@
 <#
 .SYNOPSIS
-  Cibus run notifier for Windows (Outlook email + optional toast).
+  Cibus run notifier for Windows (v1.2 - ntfy.sh).
 
 .DESCRIPTION
-  Sends the run summary as an Outlook email to the current user via
-  Outlook desktop COM automation. This path works on Microsoft-managed
-  tenants where the Teams "incoming webhook" trigger is blocked by DLP.
+  Sends a phone push via ntfy.sh and a Windows toast.
 
-  Also fires a Windows toast (BurntToast if available, otherwise a
-  classic balloon tip) for visibility when the user is at the PC.
+  On Microsoft-managed tenants every "send email/Teams as the user"
+  channel is blocked:
+    - Power Automate "TeamsWebhookRequestReceived" trigger -> DLP block.
+    - Outlook COM -> Monarch "new Outlook" has no COM interface.
+    - Microsoft Graph PowerShell SDK -> AADSTS90094 admin consent block.
+    - Az.Accounts -> Conditional Access forces interactive MFA per
+      Graph token request, incompatible with scheduled tasks.
+
+  ntfy.sh sidesteps all of that: it's an external push service, no
+  account, no auth, no Microsoft tenant surface.
 
 .PARAMETER Message
-  The notification body. First line is used as the toast title and the
-  email subject.
+  The notification body. First line becomes the toast title and the
+  ntfy "Title" header.
 
 .NOTES
-  Requires Outlook desktop (any Microsoft 365 / Office 2016+) signed in
-  as the user. No app registration, no Graph token, no DLP-restricted
-  connectors involved. If Outlook is closed, COM will launch it.
+  Requires CIBUS_NTFY_TOPIC in the environment (loaded from .env by
+  thursday-*.ps1). Topic is a "secret URL" - anyone with the topic
+  name can read your messages, so keep it long and random.
 
-  To override the recipient (default: the Outlook profile's own SMTP),
-  set $env:CIBUS_NOTIFY_EMAIL.
+  Optional:
+    CIBUS_NTFY_SERVER   override base URL (default https://ntfy.sh)
+    CIBUS_NTFY_PRIORITY ntfy priority 1-5 (default 3)
 #>
 [CmdletBinding()]
 param(
@@ -34,7 +41,7 @@ $lines = $Message -split "`r?`n"
 $title = if ($lines.Count -gt 0 -and $lines[0].Trim()) { $lines[0] } else { 'Cibus' }
 $body  = if ($lines.Count -gt 1) { ($lines | Select-Object -Skip 1) -join "`n" } else { '' }
 
-# --- Toast (best effort, never blocks email) ----------------------------
+# --- Toast (best effort, never blocks the push) ------------------------
 $toastSent = $false
 if (Get-Module -ListAvailable -Name BurntToast) {
   try {
@@ -66,44 +73,36 @@ if (-not $toastSent) {
   }
 }
 
-# --- Outlook email (the actual phone push) ------------------------------
-try {
-  $olOk = $false
+# --- ntfy.sh push -------------------------------------------------------
+$topic = $env:CIBUS_NTFY_TOPIC
+if (-not $topic) {
+  Write-Warning "CIBUS_NTFY_TOPIC not set in environment - skipping phone push."
+} else {
+  $server = if ($env:CIBUS_NTFY_SERVER) { $env:CIBUS_NTFY_SERVER.TrimEnd('/') } else { 'https://ntfy.sh' }
+  $priority = if ($env:CIBUS_NTFY_PRIORITY) { $env:CIBUS_NTFY_PRIORITY } else { '3' }
+
+  # Pick an emoji tag based on the first character of the title.
+  $tag = switch -Regex ($title) {
+    '^(.|^)\s*(✅|🟢)' { 'white_check_mark'; break }
+    '^(.|^)\s*(⚠️|🟡)' { 'warning'; break }
+    '^(.|^)\s*(❌|🔴)' { 'x'; break }
+    default { 'shopping_cart' }
+  }
+
   try {
-    $outlook = New-Object -ComObject Outlook.Application
-    $olOk = $true
+    Invoke-RestMethod -Method POST -Uri "$server/$topic" `
+      -Body $Message -ContentType 'text/plain; charset=utf-8' `
+      -Headers @{
+        Title    = $title
+        Priority = $priority
+        Tags     = $tag
+      } | Out-Null
+    Write-Host "[notify] ntfy push sent (topic=$topic, tag=$tag)."
   } catch {
-    Write-Warning "Could not start Outlook COM: $_"
+    Write-Warning "ntfy push failed: $_"
   }
-
-  if ($olOk) {
-    $ns = $outlook.GetNamespace('MAPI')
-    # Determine sender (and default recipient) from the active Outlook profile.
-    $defaultAddr = $null
-    try {
-      $defaultAddr = $ns.Accounts.Item(1).SmtpAddress
-    } catch {
-      try { $defaultAddr = $ns.CurrentUser.AddressEntry.GetExchangeUser().PrimarySmtpAddress } catch { }
-    }
-
-    $to = if ($env:CIBUS_NOTIFY_EMAIL) { $env:CIBUS_NOTIFY_EMAIL } else { $defaultAddr }
-    if (-not $to) {
-      Write-Warning "Could not resolve a recipient from Outlook; set CIBUS_NOTIFY_EMAIL in .env"
-    } else {
-      $mail = $outlook.CreateItem(0)   # olMailItem
-      $mail.Subject  = "[Cibus] $title"
-      $mail.To       = $to
-      $htmlBody  = "<pre style='font-family:Consolas,monospace;font-size:13px;white-space:pre-wrap'>"
-      $htmlBody += [System.Net.WebUtility]::HtmlEncode($Message)
-      $htmlBody += "</pre>"
-      $mail.HTMLBody = $htmlBody
-      $mail.Send()
-      Write-Host "[notify] Email sent to $to."
-    }
-  }
-} catch {
-  Write-Warning "Outlook send failed: $_"
 }
 
 Write-Host "[notify] sent: $title"
+
 

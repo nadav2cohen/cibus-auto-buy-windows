@@ -20,7 +20,7 @@ Windows port of [`Acohengadol/cibus-auto-buy`](https://github.com/Acohengadol/ci
             └── windows_otp.py  — pluggable: prompt | file | phone_link
                     │
                     ▼
-            notify.ps1 → Outlook desktop (COM) → email + Outlook mobile push
+            notify.ps1 → ntfy.sh phone push + Windows toast
 ```
 
 The only Windows-specific surface is `windows_otp.py` + the PowerShell wrappers. Everything else is plain Python and works the same as upstream.
@@ -141,11 +141,19 @@ if sys.platform not in ("darwin", "win32") and not os.environ.get("DISPLAY"):
 
 Copy [`scripts\notify.ps1`](./scripts/notify.ps1), [`scripts\thursday-run.ps1`](./scripts/thursday-run.ps1), [`scripts\thursday-sentinel.ps1`](./scripts/thursday-sentinel.ps1), and [`scripts\setup-scheduled-tasks.ps1`](./scripts/setup-scheduled-tasks.ps1) to `%USERPROFILE%\Documents\cibus-tools\`.
 
-To enable phone push, the notifier sends an **Outlook email** via Outlook desktop COM — no webhook URL, no app registration, no DLP-restricted connector. The Outlook mobile app pushes the email to your phone in seconds.
+To enable phone push, the notifier POSTs to a private **[ntfy.sh](https://ntfy.sh)** topic. Install the free ntfy app on your phone, subscribe to a long random topic name (e.g. `cibus-<your-name>-<random>`), and set the same topic in `.env`:
 
-> **Why not a Teams Incoming Webhook?** Microsoft retired classic O365 connectors on 2025-12-31, and the replacement Power Automate trigger (`TeamsWebhookRequestReceived`) is **blocked by default on Microsoft tenants** (CISO Default Environment DLP policy). Outlook COM bypasses both problems because it uses the user's already-signed-in Outlook session.
+```
+CIBUS_NTFY_TOPIC=cibus-your-name-7q4mz-r8xk2p
+# CIBUS_NTFY_SERVER=https://ntfy.sh           # override if self-hosting
+# CIBUS_NTFY_PRIORITY=3                       # 1=min, 3=default, 5=urgent
+```
 
-Optional: set `$env:CIBUS_NOTIFY_EMAIL` in `.env` if you want the email to go to a different address than your default Outlook profile.
+> **Why not Teams or Outlook?** On a Microsoft tenant every "send-as-you" automation path is blocked: Teams Incoming Webhooks are killed by the CISO DLP policy (`TeamsWebhookRequestReceived` restricted), the new "Monarch" Outlook has no COM interface, Microsoft Graph PowerShell SDK hits `AADSTS90094 admin approval required`, and Az.Accounts → Graph token requests are blocked by Conditional Access requiring interactive MFA per token (incompatible with scheduled tasks). ntfy.sh has no Microsoft tenant surface area at all.
+>
+> ntfy.sh topics are "secret URLs" — anyone with the topic name can read your messages. Keep the topic long and random, and never send sensitive content through it.
+
+Optional fallback: install [BurntToast](https://github.com/Windos/BurntToast) for a richer Windows desktop toast on top of the phone push.
 
 ## Scheduling
 
