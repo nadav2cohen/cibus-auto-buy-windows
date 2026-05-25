@@ -83,21 +83,28 @@ if (-not $topic) {
 
   # Pick an emoji tag based on the first character of the title.
   $tag = switch -Regex ($title) {
-    '^(.|^)\s*(✅|🟢)' { 'white_check_mark'; break }
-    '^(.|^)\s*(⚠️|🟡)' { 'warning'; break }
-    '^(.|^)\s*(❌|🔴)' { 'x'; break }
+    '(✅|🟢)' { 'white_check_mark'; break }
+    '(⚠️|🟡)' { 'warning'; break }
+    '(❌|🔴)' { 'x'; break }
     default { 'shopping_cart' }
   }
+
+  # ntfy requires HTTP headers to be pure ASCII. Strip emoji / non-ASCII
+  # from the Title header but keep the original UTF-8 text in the body.
+  $titleAscii = ($title -replace '[^\x20-\x7E]', '').Trim()
+  $titleAscii = ($titleAscii -replace '\s+', ' ')
+  if (-not $titleAscii) { $titleAscii = 'Cibus' }
+  if ($titleAscii.Length -gt 250) { $titleAscii = $titleAscii.Substring(0, 250) }
 
   try {
     Invoke-RestMethod -Method POST -Uri "$server/$topic" `
       -Body $Message -ContentType 'text/plain; charset=utf-8' `
       -Headers @{
-        Title    = $title
+        Title    = $titleAscii
         Priority = $priority
         Tags     = $tag
       } | Out-Null
-    Write-Host "[notify] ntfy push sent (topic=$topic, tag=$tag)."
+    Write-Host "[notify] ntfy push sent (topic=$topic, tag=$tag, title='$titleAscii')."
   } catch {
     Write-Warning "ntfy push failed: $_"
   }

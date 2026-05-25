@@ -46,7 +46,9 @@ CIBUS_PASSWORD=your_password
 RESTAURANT_URL=https://consumers.pluxee.co.il/restaurants/pickup/restaurant/33208
 CIBUS_OTP_SOURCE=prompt      # prompt | file | phone_link
 # CIBUS_OTP_FILE=$env:USERPROFILE\cibus_otp.txt
-# CIBUS_TEAMS_WEBHOOK=https://outlook.office.com/webhook/...
+CIBUS_NTFY_TOPIC=cibus-your-name-long-random-string
+# CIBUS_NTFY_SERVER=https://ntfy.sh
+# CIBUS_NTFY_PRIORITY=3
 "@ | Out-File -Encoding ASCII .env
 
 # 6) (Optional but recommended) BurntToast for native toasts
