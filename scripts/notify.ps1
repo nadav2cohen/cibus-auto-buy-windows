@@ -1,18 +1,26 @@
 <#
 .SYNOPSIS
-  Cibus run notifier for Windows.
+  Cibus run notifier for Windows (Outlook email + optional toast).
 
 .DESCRIPTION
-  Sends a Windows toast notification (via BurntToast if installed,
-  otherwise falls back to a balloon tip) and, when CIBUS_TEAMS_WEBHOOK
-  is set in the environment, POSTs the same text to a Teams incoming
-  webhook so the user can see it on their phone.
+  Sends the run summary as an Outlook email to the current user via
+  Outlook desktop COM automation. This path works on Microsoft-managed
+  tenants where the Teams "incoming webhook" trigger is blocked by DLP.
+
+  Also fires a Windows toast (BurntToast if available, otherwise a
+  classic balloon tip) for visibility when the user is at the PC.
 
 .PARAMETER Message
-  The notification body. First line is used as the toast title.
+  The notification body. First line is used as the toast title and the
+  email subject.
 
-.EXAMPLE
-  .\notify.ps1 "✅ Cibus Thursday: purchase complete."
+.NOTES
+  Requires Outlook desktop (any Microsoft 365 / Office 2016+) signed in
+  as the user. No app registration, no Graph token, no DLP-restricted
+  connectors involved. If Outlook is closed, COM will launch it.
+
+  To override the recipient (default: the Outlook profile's own SMTP),
+  set $env:CIBUS_NOTIFY_EMAIL.
 #>
 [CmdletBinding()]
 param(
@@ -26,7 +34,7 @@ $lines = $Message -split "`r?`n"
 $title = if ($lines.Count -gt 0 -and $lines[0].Trim()) { $lines[0] } else { 'Cibus' }
 $body  = if ($lines.Count -gt 1) { ($lines | Select-Object -Skip 1) -join "`n" } else { '' }
 
-# --- Toast ---------------------------------------------------------------
+# --- Toast (best effort, never blocks email) ----------------------------
 $toastSent = $false
 if (Get-Module -ListAvailable -Name BurntToast) {
   try {
@@ -58,22 +66,44 @@ if (-not $toastSent) {
   }
 }
 
-# --- Teams webhook (optional) -------------------------------------------
-$webhook = $env:CIBUS_TEAMS_WEBHOOK
-if ($webhook) {
+# --- Outlook email (the actual phone push) ------------------------------
+try {
+  $olOk = $false
   try {
-    $payload = @{
-      '@type'    = 'MessageCard'
-      '@context' = 'https://schema.org/extensions'
-      summary    = $title
-      title      = $title
-      text       = ($Message -replace "`r?`n", "  `n")
-    } | ConvertTo-Json -Depth 5
-    Invoke-RestMethod -Method POST -Uri $webhook -ContentType 'application/json' -Body $payload | Out-Null
-    Write-Host "[notify] Teams webhook POSTed."
+    $outlook = New-Object -ComObject Outlook.Application
+    $olOk = $true
   } catch {
-    Write-Warning "Teams webhook failed: $_"
+    Write-Warning "Could not start Outlook COM: $_"
   }
+
+  if ($olOk) {
+    $ns = $outlook.GetNamespace('MAPI')
+    # Determine sender (and default recipient) from the active Outlook profile.
+    $defaultAddr = $null
+    try {
+      $defaultAddr = $ns.Accounts.Item(1).SmtpAddress
+    } catch {
+      try { $defaultAddr = $ns.CurrentUser.AddressEntry.GetExchangeUser().PrimarySmtpAddress } catch { }
+    }
+
+    $to = if ($env:CIBUS_NOTIFY_EMAIL) { $env:CIBUS_NOTIFY_EMAIL } else { $defaultAddr }
+    if (-not $to) {
+      Write-Warning "Could not resolve a recipient from Outlook; set CIBUS_NOTIFY_EMAIL in .env"
+    } else {
+      $mail = $outlook.CreateItem(0)   # olMailItem
+      $mail.Subject  = "[Cibus] $title"
+      $mail.To       = $to
+      $htmlBody  = "<pre style='font-family:Consolas,monospace;font-size:13px;white-space:pre-wrap'>"
+      $htmlBody += [System.Net.WebUtility]::HtmlEncode($Message)
+      $htmlBody += "</pre>"
+      $mail.HTMLBody = $htmlBody
+      $mail.Send()
+      Write-Host "[notify] Email sent to $to."
+    }
+  }
+} catch {
+  Write-Warning "Outlook send failed: $_"
 }
 
 Write-Host "[notify] sent: $title"
+

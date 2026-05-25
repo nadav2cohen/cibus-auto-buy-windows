@@ -10,9 +10,11 @@ Packaged as a **Clawpilot skill** so any Microsoft user running Clawpilot on Win
 
 ## What it does
 
-1. **Thursday 08:00** — `thursday-sentinel.ps1` does a dry-run: logs in, reads the remaining weekly Cibus budget, computes a voucher plan, and exits without buying. Toast + optional Teams webhook to your phone.
+1. **Thursday 08:00** — `thursday-sentinel.ps1` does a dry-run: logs in, reads the remaining weekly Cibus budget, computes a voucher plan, and exits without buying.
 2. **Thursday 16:00** — `thursday-run.ps1` does it for real: greedily splits the budget into voucher denominations and checks out at a configured restaurant page.
-3. 2FA OTP is read automatically via a pluggable **Windows OTP backend** (no macOS Messages.app, no Telegram bot).
+3. After each run you get an **Outlook email** (which push-notifies the Outlook mobile app on your phone) plus a Windows desktop toast. 2FA OTP is read automatically via a pluggable **Windows OTP backend** (no macOS Messages.app, no Telegram bot).
+
+   **Update v1.1 (May 2026):** Microsoft tenants block the Teams "incoming webhook" trigger via DLP (`CISO Default Environment Policy` → `TeamsWebhookRequestReceived` restricted). The notifier therefore uses **Outlook desktop COM** — no webhook, no token, no DLP block.
 
 ## Quick start
 

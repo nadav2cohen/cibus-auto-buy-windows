@@ -20,7 +20,7 @@ Windows port of [`Acohengadol/cibus-auto-buy`](https://github.com/Acohengadol/ci
             └── windows_otp.py  — pluggable: prompt | file | phone_link
                     │
                     ▼
-            notify.ps1 → BurntToast toast + optional Teams webhook
+            notify.ps1 → Outlook desktop (COM) → email + Outlook mobile push
 ```
 
 The only Windows-specific surface is `windows_otp.py` + the PowerShell wrappers. Everything else is plain Python and works the same as upstream.
@@ -141,7 +141,11 @@ if sys.platform not in ("darwin", "win32") and not os.environ.get("DISPLAY"):
 
 Copy [`scripts\notify.ps1`](./scripts/notify.ps1), [`scripts\thursday-run.ps1`](./scripts/thursday-run.ps1), [`scripts\thursday-sentinel.ps1`](./scripts/thursday-sentinel.ps1), and [`scripts\setup-scheduled-tasks.ps1`](./scripts/setup-scheduled-tasks.ps1) to `%USERPROFILE%\Documents\cibus-tools\`.
 
-To enable Teams push, set `CIBUS_TEAMS_WEBHOOK` in `.env` to an [Incoming Webhook](https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook) URL of a channel you own.
+To enable phone push, the notifier sends an **Outlook email** via Outlook desktop COM — no webhook URL, no app registration, no DLP-restricted connector. The Outlook mobile app pushes the email to your phone in seconds.
+
+> **Why not a Teams Incoming Webhook?** Microsoft retired classic O365 connectors on 2025-12-31, and the replacement Power Automate trigger (`TeamsWebhookRequestReceived`) is **blocked by default on Microsoft tenants** (CISO Default Environment DLP policy). Outlook COM bypasses both problems because it uses the user's already-signed-in Outlook session.
+
+Optional: set `$env:CIBUS_NOTIFY_EMAIL` in `.env` if you want the email to go to a different address than your default Outlook profile.
 
 ## Scheduling
 
