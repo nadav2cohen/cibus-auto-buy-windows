@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Cibus run notifier for Windows (v1.2 - ntfy.sh).
 
@@ -81,11 +81,14 @@ if (-not $topic) {
   $server = if ($env:CIBUS_NTFY_SERVER) { $env:CIBUS_NTFY_SERVER.TrimEnd('/') } else { 'https://ntfy.sh' }
   $priority = if ($env:CIBUS_NTFY_PRIORITY) { $env:CIBUS_NTFY_PRIORITY } else { '3' }
 
-  # Pick an emoji tag based on the first character of the title.
+  # Pick an emoji tag based on the title content. Use Unicode escapes so
+  # this works even if the script is loaded under a non-UTF-8 codepage.
+  # ✅=U+2705, ⚠=U+26A0, ❌=U+274C. Supplementary-plane colored circles
+  # (🟢🟡🔴) need surrogate pairs.
   $tag = switch -Regex ($title) {
-    '(✅|🟢)' { 'white_check_mark'; break }
-    '(⚠️|🟡)' { 'warning'; break }
-    '(❌|🔴)' { 'x'; break }
+    '[\u2705]|\uD83D\uDFE2' { 'white_check_mark'; break }
+    '[\u26A0]|\uD83D\uDFE1' { 'warning'; break }
+    '[\u274C]|\uD83D\uDD34' { 'x'; break }
     default { 'shopping_cart' }
   }
 
