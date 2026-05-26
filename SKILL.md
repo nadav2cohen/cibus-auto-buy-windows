@@ -4,6 +4,22 @@ Automates weekly **Cibus / Pluxee Israel** voucher purchases on **Windows**. Rea
 
 Windows port of [`Acohengadol/cibus-auto-buy`](https://github.com/Acohengadol/cibus-auto-buy) (macOS), which patches [`AdirTuval/cibus-daily-buy`](https://github.com/AdirTuval/cibus-daily-buy).
 
+## v1.3 changes (May 2026)
+
+The React `+` button on the restaurant page is silently gated by hidden state and swallows automated clicks. The previous patches drove the UI; v1.3 drops the UI driver and talks to `/api/main.py` directly.
+
+| Concern | v1.2 | v1.3 |
+|---|---|---|
+| Add to cart | React `+` click via Playwright | `prx_add_prod_to_cart` POST (HAR-derived) |
+| SPA state | Implicit | Mirrored via `localStorage['cibus-cart_he']` |
+| Login | Permanent-password tab (`#user` + `#password`) | OTP tab (`#firstInput` + `שנמשיך?`) |
+| Required env | `CIBUS_PASSWORD` | (none — OTP only) |
+| Default restaurant | `33208` / `25923` (time-limited) | `153348` Shufersal Vouchers (always open) |
+
+The hidden `application-id: E5D5FEF5-A05E-4C64-AEBA-BA0CECA0E402` header on every `/api/main.py` POST is the missing piece that makes the direct API path work — without it the server returns `code: 726 "Empty values is not permitted"` even with valid cookies.
+
+The final confirm-order POST is still unobserved (not present in the captured HAR) and will be validated on the next live Thursday run.
+
 ## Architecture
 
 ```
@@ -13,10 +29,10 @@ Windows port of [`Acohengadol/cibus-auto-buy`](https://github.com/Acohengadol/ci
 └──────────────────────────────────────────────┘
                     │
                     ▼
-        cibus-daily-buy (patched upstream)
-            ├── login.py        — uses windows_otp instead of Telegram
-            ├── purchase.py     — compute_voucher_plan() greedy split
-            ├── run.py          — skips DISPLAY check on Windows
+        cibus-daily-buy (patched upstream — v1.3)
+            ├── login.py        — OTP-tab flow, no password
+            ├── purchase.py     — API-direct cart + localStorage sync
+            ├── run.py          — threads dish_map through add_to_cart
             └── windows_otp.py  — pluggable: prompt | file | phone_link
                     │
                     ▼
@@ -35,7 +51,7 @@ The only Windows-specific surface is `windows_otp.py` + the PowerShell wrappers.
    ```powershell
    Install-Module BurntToast -Scope CurrentUser
    ```
-6. **Cibus account credentials** + a phone number on file that receives SMS OTPs.
+6. **Cibus account** + a phone number on file that receives SMS OTPs (no password is used in v1.3).
 7. **"Remember this device"** ticked on first 2FA login — Playwright reuses the persistent profile after that.
 
 ## Repo layout (created under `%USERPROFILE%\Documents\cibus-tools\`)
@@ -44,11 +60,11 @@ The only Windows-specific surface is `windows_otp.py` + the PowerShell wrappers.
 cibus-tools\
 ├── cibus-daily-buy\             # cloned + patched upstream
 │   ├── .venv\                   # python venv (chromium + deps installed)
-│   ├── .env                     # CIBUS_USERNAME / PASSWORD / URL / OTP_SOURCE
+│   ├── .env                     # CIBUS_USERNAME / RESTAURANT_URL / OTP_SOURCE
 │   ├── cibus_daily_buy\
-│   │   ├── login.py             # patched: reads OTP via windows_otp
-│   │   ├── purchase.py          # patched: compute_voucher_plan(), multi-voucher
-│   │   ├── run.py               # patched: skips Linux DISPLAY check
+│   │   ├── login.py             # patched: OTP-tab flow (v1.3)
+│   │   ├── purchase.py          # patched: API-direct cart + localStorage sync (v1.3)
+│   │   ├── run.py               # patched: threads dish_map, skips DISPLAY check
 │   │   └── windows_otp.py       # NEW — pluggable OTP backends
 │   └── logs\                    # per-run logs
 ├── notify.ps1                   # toast + optional Teams webhook
@@ -82,60 +98,25 @@ Reads from the Microsoft **Phone Link** app's local SQLite store under `%LOCALAP
 
 ## Patches (apply on top of upstream `AdirTuval/cibus-daily-buy`)
 
-### 1. `cibus_daily_buy/windows_otp.py` (new file)
+Starting with **v1.3**, all four patched files are shipped as drop-in replacements under [`patches/`](./patches/). After cloning upstream, just copy them in:
 
-Copy from [`patches/windows_otp.py`](./patches/windows_otp.py).
-
-### 2. `cibus_daily_buy/login.py`
-
-Replace the Telegram OTP call:
-
-```python
-# from cibus_daily_buy.telegram import ask_telegram
-from cibus_daily_buy.windows_otp import read_otp
+```powershell
+$src  = "$env:USERPROFILE\Documents\cibus-tools\cibus-auto-buy-windows\patches"
+$dest = "$env:USERPROFILE\Documents\cibus-tools\cibus-daily-buy\cibus_daily_buy"
+Copy-Item "$src\login.py"       $dest -Force
+Copy-Item "$src\purchase.py"    $dest -Force
+Copy-Item "$src\run.py"         $dest -Force
+Copy-Item "$src\windows_otp.py" $dest -Force
 ```
 
-Inside `_handle_otp` (or wherever upstream calls `ask_telegram`):
+| File | Purpose (v1.3) |
+|---|---|
+| `windows_otp.py` (new) | Pluggable Windows OTP backends — `prompt` / `file` / `phone_link`. |
+| `login.py` | OTP-tab login flow: dismisses OneTrust cookie banner, clicks the **קוד חד פעמי** (one-time code) tab, types email into `#firstInput`, clicks the **שנמשיך?** continue button, and reads the OTP via `windows_otp.read_otp()`. Tolerates the "element detached" race that fires when the OTP input is replaced mid-fill. |
+| `purchase.py` | API-direct cart: POSTs straight to `https://api.consumers.pluxee.co.il/api/main.py` (`prx_add_prod_to_cart`) with the hidden `application-id` header, then mirrors the resulting cart into `localStorage['cibus-cart_he']` so the React SPA's `/preorder` page renders the confirm button. Falls back to UI clicks only if the API path returns a non-OK code. |
+| `run.py` | Captures the menu tree once, threads the resulting `dish_map` through `add_to_cart_via_api`, and skips the Linux `DISPLAY` guard on Windows. |
 
-```python
-otp = read_otp(timeout=180)
-```
-
-### 3. `cibus_daily_buy/purchase.py`
-
-Multi-voucher checkout — same patch as the macOS fork, unchanged. Add a greedy splitter and loop `add_to_cart` per entry:
-
-```python
-DENOMS = [200, 100, 50, 30]  # adjust to your restaurant
-
-def compute_voucher_plan(budget: float) -> list[int]:
-    plan, remaining = [], int(budget)
-    for d in DENOMS:
-        while remaining >= d:
-            plan.append(d)
-            remaining -= d
-    return plan
-```
-
-Make `check_budget()` return a `float`.
-
-### 4. `cibus_daily_buy/run.py`
-
-Use the plan and skip the Linux `DISPLAY` guard on Windows:
-
-```python
-plan = compute_voucher_plan(budget)
-log.info(f"Voucher plan for ₪{budget}: {plan}")
-if not plan:
-    log.warning("Budget too low — no vouchers to buy"); return
-for amt in plan:
-    add_to_cart(page, amt)
-```
-
-```python
-if sys.platform not in ("darwin", "win32") and not os.environ.get("DISPLAY"):
-    sys.exit("No DISPLAY")
-```
+No manual code edits are needed — the four files in `patches/` are the full, ready-to-drop replacements.
 
 ## Wrapper scripts
 

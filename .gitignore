@@ -7,3 +7,17 @@ logs/
 *.log
 .playwright-profile/
 cibus_otp.txt
+
+# v1.3 dev artifacts (don't ship via the patch overlay)
+cibus-profile/
+chrome_profile/
+screenshots/
+cibus_daily_buy/
+probe_*.py
+probe_*.png
+probe_*.json
+diag_*.py
+find_open_vouchers.py
+storage_*.json
+menu_dump.json
+*.har
