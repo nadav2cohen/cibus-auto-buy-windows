@@ -168,19 +168,21 @@ def discover_denominations(page) -> list:
 
 
 def compute_voucher_plan(budget: float, denoms: list, max_overshoot: int = 5) -> list:
-    """Find a multiset of denoms summing to ~budget using coin-change DP.
+    """Find a multiset of denoms that fully utilizes ~budget using coin-change DP.
 
-    Strategy (in order of preference):
-      1. Exact fit (sum == floor(budget)).
-      2. Smallest overshoot in [floor(budget)+1, floor(budget)+max_overshoot].
-      3. Largest undershoot (sum < floor(budget), sum >= min(denoms)).
+    Policy ("ceiling Γאפ utilize every agora"):
+      - Round budget UP to the next integer (so Γג¬160.70 is treated as ΓיÑ Γג¬161).
+      - Find the smallest sum ΓיÑ ceil(budget) within ceil(budget)+max_overshoot.
+      - If nothing reachable in that window, fall back to largest undershoot
+        (sum < ceil(budget), sum >= min(denoms)).
 
     Among ties, prefers fewer vouchers (= larger denoms).
     Returns the chosen multiset sorted descending. Empty list = nothing to buy.
     """
+    import math
     if not denoms:
         return []
-    budget_floor = int(budget)  # ignore agorot
+    budget_floor = math.ceil(budget)  # round UP Γאפ utilize every agora
     upper = budget_floor + max_overshoot
     if upper < min(denoms):
         return []
@@ -197,7 +199,7 @@ def compute_voucher_plan(budget: float, denoms: list, max_overshoot: int = 5) ->
                     best = candidate
         dp[s] = best
 
-    # Exact, then overshoot.
+    # Exact-or-overshoot (we already rounded UP, so this picks the next ├╖denom step).
     for s in range(budget_floor, upper + 1):
         if dp[s] is not None:
             return sorted(dp[s], reverse=True)
