@@ -6,6 +6,11 @@ Windows port of [`Acohengadol/cibus-auto-buy`](https://github.com/Acohengadol/ci
 
 Packaged as a **Clawpilot skill** so any Microsoft user running Clawpilot on Windows can drop it in and schedule it.
 
+**v1.3 highlights**
+- **API-direct cart** — bypasses the React `+` button (silently gated under automation) by POSTing `prx_add_prod_to_cart` directly to `/api/main.py`. Mirrors the cart into `localStorage['cibus-cart_he']` so the SPA stays in sync and `/preorder` loads with the confirm button visible.
+- **OTP-tab login** — the "permanent password" tab now requires a "company name" field; we switched to the "קוד חד פעמי" (one-time code) tab. `CIBUS_PASSWORD` is no longer used.
+- **Always-open restaurant** — default `RESTAURANT_URL` is now `153348` (Shufersal Vouchers, `is_open=1` 24/7). Store-specific restaurants like `25923` (Shufersal Petach Tikva) only accept orders during their local hours.
+
 ---
 
 ## What it does
@@ -32,9 +37,12 @@ py -3 -m venv .venv
 pip install -r requirements.txt
 playwright install chromium
 
-# 3) Apply patches: copy windows_otp.py into the package, edit login.py
-#    and run.py per SKILL.md.
+# 3) Apply patches: copy the four v1.3 files into the upstream package.
+#    See SKILL.md for diff-level details.
 Copy-Item ..\cibus-auto-buy-windows\patches\windows_otp.py .\cibus_daily_buy\
+Copy-Item ..\cibus-auto-buy-windows\patches\login.py       .\cibus_daily_buy\
+Copy-Item ..\cibus-auto-buy-windows\patches\purchase.py    .\cibus_daily_buy\
+Copy-Item ..\cibus-auto-buy-windows\patches\run.py         .\cibus_daily_buy\
 
 # 4) Copy wrapper scripts to the tools root
 Copy-Item ..\cibus-auto-buy-windows\scripts\*.ps1 ..\
@@ -42,8 +50,11 @@ Copy-Item ..\cibus-auto-buy-windows\scripts\*.ps1 ..\
 # 5) Configure .env (chmod-style ACL hardening recommended)
 @"
 CIBUS_USERNAME=you@example.com
-CIBUS_PASSWORD=your_password
-RESTAURANT_URL=https://consumers.pluxee.co.il/restaurants/pickup/restaurant/33208
+# CIBUS_PASSWORD is no longer needed — v1.3 uses the OTP-tab login flow.
+# Restaurant 153348 = Shufersal Vouchers (generic, always open). Other
+# voucher restaurants (e.g. 25923 Shufersal Petach Tikva) only accept
+# orders during their store-specific hours.
+RESTAURANT_URL=https://consumers.pluxee.co.il/restaurants/pickup/restaurant/153348
 CIBUS_OTP_SOURCE=prompt      # prompt | file | phone_link
 # CIBUS_OTP_FILE=$env:USERPROFILE\cibus_otp.txt
 CIBUS_NTFY_TOPIC=cibus-your-name-long-random-string
