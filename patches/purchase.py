@@ -12,7 +12,7 @@ from cibus_daily_buy.config import (
     log,
 )
 
-# Cibus API constants — captured from real browser traffic (HAR).
+# Cibus API constants Γאפ captured from real browser traffic (HAR).
 # The API host is separate from the page origin; calls also require this
 # `application-id` header or they 400 with "Empty values is not permitted".
 API_URL = "https://api.consumers.pluxee.co.il/api/main.py"
@@ -56,11 +56,11 @@ def check_budget(page) -> float:
     text = budget_el.text_content()
     take_screenshot(page, "04_budget")
 
-    match = re.search(r"₪([\d,]+\.?\d*)", text)
+    match = re.search(r"Γג¬([\d,]+\.?\d*)", text)
     if not match:
         raise RuntimeError(f"Could not parse budget from: {text!r}")
     budget = float(match.group(1).replace(",", ""))
-    log.info(f"Remaining budget: ₪{budget:.2f}")
+    log.info(f"Remaining budget: Γג¬{budget:.2f}")
     return budget
 
 
@@ -68,10 +68,10 @@ def dismiss_error_modal(page) -> bool:
     """Close any open Cibus error/info dialog.
 
     Step 1: try Playwright-native clicks on known close selectors
-    (`a.x-icon`, `.modal-header .close`, etc.) — these dispatch real
+    (`a.x-icon`, `.modal-header .close`, etc.) Γאפ these dispatch real
     trusted mouse events which React state actually responds to.
     Step 2: fall back to text-based JS detection + click for unknown layouts.
-    Step 3: final fallback — Escape key.
+    Step 3: final fallback Γאפ Escape key.
     """
     # Step 1: native Playwright click on common close selectors
     selectors = [
@@ -100,7 +100,7 @@ def dismiss_error_modal(page) -> bool:
     info = {}
     try:
         info = page.evaluate(r"""() => {
-            const ERR_TEXTS = ['חלה שגיאה', 'שגיאה בשליחת', 'משובר אחד', 'הזמנה נוספת'];
+            const ERR_TEXTS = ['╫ק╫£╫פ ╫⌐╫ע╫ש╫נ╫פ', '╫⌐╫ע╫ש╫נ╫פ ╫ס╫⌐╫£╫ש╫ק╫¬', '╫₧╫⌐╫ץ╫ס╫¿ ╫נ╫ק╫ף', '╫פ╫צ╫₧╫á╫פ ╫á╫ץ╫í╫ñ╫¬'];
             const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
             let textNode = null;
             while (walker.nextNode()) {
@@ -157,7 +157,7 @@ def discover_denominations(page) -> list:
     labels = page.locator('.card .card-footer label').all_text_contents()
     seen = set()
     for txt in labels:
-        m = re.search(r"₪(\d+(?:\.\d+)?)", txt)
+        m = re.search(r"Γג¬(\d+(?:\.\d+)?)", txt)
         if m:
             v = int(float(m.group(1)))
             if v > 0:
@@ -251,8 +251,8 @@ def _walk_dishes(node, cat_id=None, out=None):
     """Recurse the rest_menu_tree response collecting `{price: (cat_id, dish_id)}`.
 
     The tree uses Cibus' nested element model:
-      - element_type == 12 → category (carries the category_id we need)
-      - element_type == 13 → dish (carries the dish_id we need)
+      - element_type == 12 Γזע category (carries the category_id we need)
+      - element_type == 13 Γזע dish (carries the dish_id we need)
     The fields are `element_id` and `price`, NOT `dish_id`/`dish_price`.
     """
     if out is None:
@@ -288,19 +288,19 @@ def _click_plus_for_amount(page, coupon_amount: int):
     onClick handler is silently gated on hidden state and refuses to fire
     `prx_add_prod_to_cart` from automated clicks.
     """
-    card_selector = f'.card:has(.card-footer label:text("₪{coupon_amount}.00"))'
+    card_selector = f'.card:has(.card-footer label:text("Γג¬{coupon_amount}.00"))'
     card = page.locator(card_selector).first
     plus_btn = card.locator('input[type="image"]')
     plus_btn.wait_for(state="visible", timeout=ACTION_TIMEOUT)
 
-    log.info(f"Clicking + on ₪{coupon_amount} card")
+    log.info(f"Clicking + on Γג¬{coupon_amount} card")
     try:
         with page.expect_response("**/api/main.py", timeout=8000) as resp_info:
             plus_btn.click(force=True)
         return resp_info.value
     except PlaywrightTimeout:
         log.warning(
-            "Native click did not trigger API call — "
+            "Native click did not trigger API call Γאפ "
             "retrying with JS-dispatched click"
         )
         with page.expect_response("**/api/main.py", timeout=ACTION_TIMEOUT) as resp_info:
@@ -309,11 +309,11 @@ def _click_plus_for_amount(page, coupon_amount: int):
                     const cards = [...document.querySelectorAll('.card')];
                     const card = cards.find(c => {
                         const lbl = c.querySelector('.card-footer label');
-                        return lbl && lbl.textContent && lbl.textContent.includes(`₪${amount}.00`);
+                        return lbl && lbl.textContent && lbl.textContent.includes(`Γג¬${amount}.00`);
                     });
-                    if (!card) throw new Error(`No card for ₪${amount}`);
+                    if (!card) throw new Error(`No card for Γג¬${amount}`);
                     const btn = card.querySelector('input[type="image"]');
-                    if (!btn) throw new Error(`No + button for ₪${amount}`);
+                    if (!btn) throw new Error(`No + button for Γג¬${amount}`);
                     btn.click();
                 }""",
                 coupon_amount,
@@ -326,7 +326,7 @@ def _sync_local_cart(page, coupon_amount: int, cat_id: int, dish_id: int) -> Non
 
     The Cibus SPA reads its cart state from localStorage, NOT from
     `prx_get_cart`. Our API-direct add updates the server cart but leaves
-    the local store empty — which makes /preorder redirect back to the
+    the local store empty Γאפ which makes /preorder redirect back to the
     restaurant list. Writing the entry into localStorage keeps the SPA's
     React state in sync.
     """
@@ -348,7 +348,7 @@ def _sync_local_cart(page, coupon_amount: int, cat_id: int, dish_id: int) -> Non
         "(payload) => localStorage.setItem('cibus-cart_he', JSON.stringify(payload))",
         cart_entry,
     )
-    log.info(f"Synced localStorage cibus-cart_he with ₪{coupon_amount} entry")
+    log.info(f"Synced localStorage cibus-cart_he with Γג¬{coupon_amount} entry")
 
 
 def add_to_cart_via_api(page, coupon_amount: int, dish_map: dict) -> None:
@@ -356,7 +356,7 @@ def add_to_cart_via_api(page, coupon_amount: int, dish_map: dict) -> None:
 
     The UI `+` button is gated by hidden React state and silently swallows
     automated clicks (verified across modal-dismissal strategies, fresh
-    profiles, and clean carts). The underlying API call works fine — and
+    profiles, and clean carts). The underlying API call works fine Γאפ and
     is what a real click would have produced.
 
     After the server-side add, we mirror the cart into localStorage so the
@@ -364,12 +364,12 @@ def add_to_cart_via_api(page, coupon_amount: int, dish_map: dict) -> None:
     """
     if coupon_amount not in dish_map:
         raise RuntimeError(
-            f"No dish_id known for ₪{coupon_amount} — "
+            f"No dish_id known for Γג¬{coupon_amount} Γאפ "
             f"available: {sorted(dish_map.keys())}"
         )
     cat_id, dish_id = dish_map[coupon_amount]
     log.info(
-        f"API-add ₪{coupon_amount} (category_id={cat_id}, dish_id={dish_id})"
+        f"API-add Γג¬{coupon_amount} (category_id={cat_id}, dish_id={dish_id})"
     )
     resp = _post_api(page, {
         "type": "prx_add_prod_to_cart",
@@ -387,7 +387,7 @@ def add_to_cart_via_api(page, coupon_amount: int, dish_map: dict) -> None:
         raise RuntimeError(
             f"prx_add_prod_to_cart failed: code={code}, msg={resp.get('msg')}"
         )
-    log.info(f"prx_add_prod_to_cart OK — added ₪{coupon_amount} to cart")
+    log.info(f"prx_add_prod_to_cart OK Γאפ added Γג¬{coupon_amount} to cart")
     _sync_local_cart(page, coupon_amount, cat_id, dish_id)
     take_screenshot(page, f"06_after_add_{coupon_amount}")
 
@@ -401,7 +401,7 @@ def add_to_cart(page, coupon_amount: int, dish_map: dict = None) -> None:
         return
 
     log.warning(
-        "add_to_cart called without dish_map — falling back to legacy click flow"
+        "add_to_cart called without dish_map Γאפ falling back to legacy click flow"
     )
     time.sleep(1.0)
     dismiss_error_modal(page)
@@ -414,12 +414,12 @@ def add_to_cart(page, coupon_amount: int, dish_map: dict = None) -> None:
             break
         except PlaywrightTimeout:
             log.warning(
-                f"+ click attempt {attempt} timed out — checking for error modal"
+                f"+ click attempt {attempt} timed out Γאפ checking for error modal"
             )
             take_screenshot(page, f"05c_timeout_{coupon_amount}_{attempt}")
             closed = dismiss_error_modal(page)
             if not closed:
-                log.info("No modal found via DOM — sending Escape key")
+                log.info("No modal found via DOM Γאפ sending Escape key")
                 try:
                     page.keyboard.press("Escape")
                     time.sleep(0.4)
@@ -434,7 +434,7 @@ def add_to_cart(page, coupon_amount: int, dish_map: dict = None) -> None:
     log.info(f"prx_add_prod_to_cart response: code={body.get('code')}, msg={body.get('msg')}")
     if body.get("code") != 0:
         raise RuntimeError(f"Failed to add to cart: code={body.get('code')}, msg={body.get('msg')}")
-    log.info(f"Added ₪{coupon_amount} to cart")
+    log.info(f"Added Γג¬{coupon_amount} to cart")
     take_screenshot(page, f"06_after_add_{coupon_amount}")
 
 
@@ -443,10 +443,10 @@ def navigate_to_checkout(page) -> bool:
 
     After an API-direct cart add, the front-end React store is out of sync
     with the server cart. Reload the current page first so the SPA refetches
-    `prx_get_cart` on init — otherwise /preorder sees empty front-end state
+    `prx_get_cart` on init Γאפ otherwise /preorder sees empty front-end state
     and redirects to the restaurants list.
     """
-    log.info("Refreshing page state to sync front-end with server cart…")
+    log.info("Refreshing page state to sync front-end with server cartΓאª")
     try:
         page.reload(wait_until="domcontentloaded")
         time.sleep(2)
@@ -460,11 +460,11 @@ def navigate_to_checkout(page) -> bool:
 
     checkout_ok = False
     if "preorder" in page.url:
-        confirm_btn = page.locator('button:has-text("אישור ההזמנה")')
+        confirm_btn = page.locator('button:has-text("╫נ╫ש╫⌐╫ץ╫¿ ╫פ╫פ╫צ╫₧╫á╫פ")')
         try:
             confirm_btn.wait_for(state="visible", timeout=ACTION_TIMEOUT)
             checkout_ok = True
-            log.info("Checkout page stable — confirm button visible")
+            log.info("Checkout page stable Γאפ confirm button visible")
         except PlaywrightTimeout:
             log.warning("Checkout page loaded but confirm button not found")
     else:
@@ -473,23 +473,107 @@ def navigate_to_checkout(page) -> bool:
     return checkout_ok
 
 
+def _get_next_order_time(page) -> str:
+    """Fetch the first available pickup time slot (HH:MM) from rest_scan.
+
+    The /preorder page reads `timeinfo.ordtime[*].time` from the per-restaurant
+    payload. We POST the same call directly so we don't need the DOM.
+    """
+    res = _post_api(page, {"type": "prx_rests_curr_sums"})
+    if res.get("code") != 0:
+        raise RuntimeError(f"prx_rests_curr_sums failed: {res}")
+    # The response contains a list of restaurants with timeinfo.ordtime.
+    rests = res.get("list") or []
+    for r in rests:
+        ti = (r.get("timeinfo") or {}).get("ordtime") or []
+        if ti:
+            slot = ti[0].get("time")
+            if slot:
+                log.info(f"Next available order time slot: {slot}")
+                return slot
+    # Fallback: read from the page itself (UI dropdown defaults to the first slot)
+    try:
+        slot = page.evaluate(
+            """() => {
+              const el = document.querySelector('select[name*="time"], select.order-time, mat-select');
+              if (el && el.value) return el.value;
+              const sl = document.querySelector('[class*="time"]');
+              if (sl) return (sl.textContent || '').trim().match(/\\d{1,2}:\\d{2}/)?.[0] || null;
+              return null;
+            }"""
+        )
+        if slot:
+            log.info(f"Next order time slot (from DOM): {slot}")
+            return slot
+    except Exception:
+        pass
+    raise RuntimeError("Could not determine next available order time")
+
+
+def submit_order_via_api(page, order_time: str = None) -> dict:
+    """POST prx_simulate_order then prx_apply_order. Returns the deal record.
+
+    This bypasses the UI confirm button entirely. The button is gated by the
+    React store having seen a successful prx_simulate_order Γאפ but since we POST
+    prx_apply_order directly, that gate is irrelevant.
+
+    Captured shape (HAR-derived, manual Γג¬15 buy 2026-05-28):
+      simulate: {"type":"prx_simulate_order","order_time":"12:15"} -> code:0
+      apply:    {"type":"prx_apply_order","order_time":"12:15"}    -> deal_id
+    """
+    slot = order_time or _get_next_order_time(page)
+
+    log.info(f"prx_simulate_order @ {slot}")
+    sim = _post_api(page, {"type": "prx_simulate_order", "order_time": slot})
+    if sim.get("code") != 0:
+        raise RuntimeError(f"prx_simulate_order failed: {sim}")
+    log.info(f"  simulate OK: {sim.get('list')}")
+
+    log.info(f"prx_apply_order @ {slot}")
+    res = _post_api(page, {"type": "prx_apply_order", "order_time": slot})
+    if res.get("code") != 0:
+        raise RuntimeError(f"prx_apply_order failed: {res}")
+    deal_list = res.get("list") or []
+    if not deal_list or "deal_id" not in deal_list[0]:
+        raise RuntimeError(f"prx_apply_order returned no deal_id: {res}")
+    deal = deal_list[0]
+    log.info(
+        f"Γ£ו Order placed Γאפ deal_id={deal['deal_id']} "
+        f"restaurant_id={deal.get('restaurant_id')} "
+        f"result_code={deal.get('result_code')}"
+    )
+    return deal
+
+
 def confirm_order(page) -> None:
-    """Re-locate the confirm button, click it, and wait for confirmation."""
-    log.info("Confirming order...")
-    confirm_btn = page.locator('button:has-text("אישור ההזמנה")')
+    """Submit the order via API. Bypasses the disabled-by-default UI button.
+
+    The historic UI flow (click '╫נ╫ש╫⌐╫ץ╫¿ ╫פ╫פ╫צ╫₧╫á╫פ') is preserved as a fallback only Γאפ
+    on the API path the button never has to enable.
+    """
+    log.info("Confirming order via prx_apply_order...")
+    try:
+        deal = submit_order_via_api(page)
+        time.sleep(2)
+        take_screenshot(page, "08_after_confirm")
+        log.info(f"Γ£ו Purchase completed Γאפ deal_id={deal['deal_id']}")
+        return
+    except Exception as e:
+        log.warning(f"API confirm failed, falling back to UI click: {e}")
+    confirm_btn = page.locator('button:has-text("╫נ╫ש╫⌐╫ץ╫¿ ╫פ╫פ╫צ╫₧╫á╫פ")')
     confirm_btn.click()
     page.wait_for_load_state("domcontentloaded")
     time.sleep(3)
     take_screenshot(page, "08_after_confirm")
-    log.info("✅ Purchase completed successfully!")
+    log.info("Γ£ו Purchase completed via UI fallback")
 
 
 def _confirm_deletion(page) -> None:
     """Handle the deletion confirmation dialog after trash click."""
     confirm_selectors = [
-        'button:has-text("כן, למחוק")',
-        'text="כן, למחוק"',
-        ':text("למחוק")',
+        'button:has-text("╫¢╫ƒ, ╫£╫₧╫ק╫ץ╫º")',
+        'text="╫¢╫ƒ, ╫£╫₧╫ק╫ץ╫º"',
+        ':text("╫£╫₧╫ק╫ץ╫º")',
     ]
     for sel in confirm_selectors:
         try:
@@ -511,7 +595,7 @@ def cleanup_cart(page, context) -> None:
     """Remove ALL items from cart.
 
     Strategy:
-      1. Try the API-direct `prx_del_cart` first — fast, reliable, server-side,
+      1. Try the API-direct `prx_del_cart` first Γאפ fast, reliable, server-side,
          and works even if there are no trash icons visible (e.g. cart in a
          stuck state where the preorder page doesn't render line items).
       2. Fall back to the legacy UI trash-icon flow only if the API call fails
@@ -523,7 +607,7 @@ def cleanup_cart(page, context) -> None:
     try:
         resp = _post_api(page, {"type": "prx_del_cart"})
         if resp.get("code") == 0:
-            log.info("prx_del_cart OK — server cart cleared via API")
+            log.info("prx_del_cart OK Γאפ server cart cleared via API")
             try:
                 page.evaluate("localStorage.setItem('cibus-cart_he', JSON.stringify({dish_list: []}))")
             except Exception as e:
@@ -531,11 +615,11 @@ def cleanup_cart(page, context) -> None:
             save_session(context)
             return
         log.warning(
-            f"prx_del_cart returned code={resp.get('code')} msg={resp.get('msg')} — "
+            f"prx_del_cart returned code={resp.get('code')} msg={resp.get('msg')} Γאפ "
             "falling back to UI trash flow"
         )
     except Exception as api_err:
-        log.warning(f"prx_del_cart API call failed ({api_err}) — falling back to UI trash flow")
+        log.warning(f"prx_del_cart API call failed ({api_err}) Γאפ falling back to UI trash flow")
 
     # Step 2: legacy UI flow
     trash_selectors = [
@@ -563,7 +647,7 @@ def cleanup_cart(page, context) -> None:
                 continue
         if trash_btn is None:
             break
-        log.info(f"Found trash button ({used_sel}) — removing item {iteration}")
+        log.info(f"Found trash button ({used_sel}) Γאפ removing item {iteration}")
         take_screenshot(page, f"08_before_trash_click_{iteration}")
         try:
             trash_btn.click()
@@ -577,7 +661,7 @@ def cleanup_cart(page, context) -> None:
             break
 
     if cleaned == 0:
-        log.info("No trash buttons found — cart already empty")
+        log.info("No trash buttons found Γאפ cart already empty")
     else:
         log.info(f"Removed {cleaned} cart item(s) via trash icon")
 
