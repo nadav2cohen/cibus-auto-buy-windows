@@ -474,40 +474,51 @@ def navigate_to_checkout(page) -> bool:
 
 
 def _get_next_order_time(page) -> str:
-    """Fetch the first available pickup time slot (HH:MM) from rest_scan.
+    """Next available pickup slot as HH:MM.
 
-    The /preorder page reads `timeinfo.ordtime[*].time` from the per-restaurant
-    payload. We POST the same call directly so we don't need the DOM.
+    Strategy:
+      1. Read from the /preorder DOM (the visible slot dropdown / selected text).
+      2. Fall back to computing the next 15-minute boundary from local now.
+
+    Voucher-only orders accept any future slot Γאפ the manual HAR used the next
+    quarter-hour after cart-add, so we just match that behavior.
     """
-    res = _post_api(page, {"type": "prx_rests_curr_sums"})
-    if res.get("code") != 0:
-        raise RuntimeError(f"prx_rests_curr_sums failed: {res}")
-    # The response contains a list of restaurants with timeinfo.ordtime.
-    rests = res.get("list") or []
-    for r in rests:
-        ti = (r.get("timeinfo") or {}).get("ordtime") or []
-        if ti:
-            slot = ti[0].get("time")
-            if slot:
-                log.info(f"Next available order time slot: {slot}")
-                return slot
-    # Fallback: read from the page itself (UI dropdown defaults to the first slot)
     try:
         slot = page.evaluate(
             """() => {
-              const el = document.querySelector('select[name*="time"], select.order-time, mat-select');
-              if (el && el.value) return el.value;
-              const sl = document.querySelector('[class*="time"]');
-              if (sl) return (sl.textContent || '').trim().match(/\\d{1,2}:\\d{2}/)?.[0] || null;
-              return null;
+              const sel = document.querySelector('select[name*="time"], select.order-time');
+              if (sel && sel.value && /^\\d{1,2}:\\d{2}$/.test(sel.value)) return sel.value;
+              const opts = document.querySelectorAll('option, [role="option"]');
+              for (const o of opts) {
+                const m = (o.textContent || '').trim().match(/^\\d{1,2}:\\d{2}$/);
+                if (m) return m[0];
+              }
+              const all = document.body.innerText || '';
+              const m = all.match(/\\b([01]?\\d|2[0-3]):[0-5]\\d\\b/);
+              return m ? m[0] : null;
             }"""
         )
         if slot:
             log.info(f"Next order time slot (from DOM): {slot}")
             return slot
+    except Exception as e:
+        log.warning(f"DOM slot probe failed: {e}")
+
+    # Fallback: next 15-minute boundary from now (Asia/Jerusalem).
+    import datetime
+    try:
+        from zoneinfo import ZoneInfo
+        now = datetime.datetime.now(ZoneInfo("Asia/Jerusalem"))
     except Exception:
-        pass
-    raise RuntimeError("Could not determine next available order time")
+        now = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+    minute = ((now.minute // 15) + 1) * 15
+    hour = now.hour
+    if minute >= 60:
+        minute = 0
+        hour = (hour + 1) % 24
+    slot = f"{hour:02d}:{minute:02d}"
+    log.info(f"Next order time slot (computed): {slot}")
+    return slot
 
 
 def submit_order_via_api(page, order_time: str = None) -> dict:
